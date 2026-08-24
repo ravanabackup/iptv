@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>M3U URL Status & Screenshot Checker</title>
+  
+  <!-- HLS.js for parsing and playing .m3u8 streams to capture snapshots -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface-2: #242836;
+      --border: #2e3345;
+      --text: #e6e8ef;
+      --text-muted: #8b90a5;
+      --accent: #6366f1;
+      --accent-hover: #818cf8;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #3b82f6;
+      --radius: 12px;
+      --shadow: 0 4px 24px rgba(0,0,0,0.3);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 1350px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    header .logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent), #a855f7);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 26px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #fff, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p { margin: 2px 0 0; color: var(--text-muted); font-size: 14px; }
+
+    .note {
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      padding: 14px 16px;
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .note b { color: var(--text); }
+    .note code {
+      background: rgba(255,255,255,0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title .icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      background: var(--surface-2);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    label { display: block; font-weight: 500; font-size: 13px; color: var(--text-muted); }
+    
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 10px 12px;
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 14px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="text"]:focus, input[type="number"]:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    input[type="file"] { margin-top: 6px; color: var(--text-muted); font-size: 13px; }
+    input[type="file"]::file-selector-button {
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-right: 10px;
+      font-size: 13px;
+    }
+    input[type="file"]::file-selector-button:hover { background: var(--border); }
+
+    .row { display: flex; gap: 8px; margin-top: 12px; }
+    .row input { flex: 1; }
+
+    .checkbox-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+    .checkbox-row label {
+      display: flex; align-items: center; gap: 6px;
+      font-weight: 400; color: var(--text); font-size: 13px; cursor: pointer;
+    }
+    .checkbox-row input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+
+    .quick-imports { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .quick-btn {
+      display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+      border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface-2); color: var(--text); font-size: 13px;
+      font-weight: 500; cursor: pointer; transition: all 0.2s;
+    }
+    .quick-btn:hover { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
+    .quick-btn .flag { font-size: 18px; }
+
+    button {
+      padding: 10px 16px; border: none; border-radius: 8px;
+      background: var(--accent); color: white; cursor: pointer;
+      font-weight: 600; font-size: 14px; transition: all 0.2s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    button:hover { background: var(--accent-hover); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    button:disabled { background: var(--surface-2); color: var(--text-muted); cursor: not-allowed; transform: none; }
+    
+    .btn-secondary { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
+    .btn-secondary:hover { background: var(--border); }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: var(--danger); }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+    .btn-success { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--success); }
+    .btn-success:hover { background: rgba(16, 185, 129, 0.25); }
+    
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+
+    .progress-wrap { margin-top: 16px; }
+    .progress-bar {
+      width: 100%; height: 8px; background: var(--surface-2);
+      border-radius: 99px; overflow: hidden; position: relative;
+    }
+    .progress-fill {
+      height: 100%; background: linear-gradient(90deg, var(--accent), #a855f7);
+      border-radius: 99px; transition: width 0.3s ease; width: 0%;
+    }
+    .progress-fill.running::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+    .progress-text { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-muted); }
+
+    #summary, #playlistInfo { margin-top: 8px; font-size: 13px; color: var(--text-muted); line-height: 1.8; }
+    
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .stat { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+    .stat-ok { background: rgba(16, 185, 129, 0.12); color: var(--success); }
+    .stat-warn { background: rgba(245, 158, 11, 0.12); color: var(--warning); }
+    .stat-bad { background: rgba(239, 68, 68, 0.12); color: var(--danger); }
+    .stat-info { background: rgba(59, 130, 246, 0.12); color: var(--info); }
+    .stat-muted { background: rgba(139, 144, 165, 0.12); color: var(--text-muted); }
+
+    .table-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow);
+    }
+    .table-scroll { max-height: 650px; overflow-y: auto; }
+    .table-scroll::-webkit-scrollbar { width: 8px; }
+    .table-scroll::-webkit-scrollbar-track { background: var(--surface); }
+    .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 14px; text-align: left; vertical-align: middle; font-size: 13px; border-bottom: 1px solid var(--border); }
+    th {
+      background: var(--surface-2); color: var(--text-muted); font-weight: 600; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 1;
+    }
+    tbody tr { transition: background 0.15s; }
+    tbody tr:hover { background: rgba(99, 102, 241, 0.04); }
+    tbody tr:nth-child(even) { background: rgba(255,255,255,0.01); }
+
+    td.url { word-break: break-all; max-width: 350px; }
+    td.url a { color: var(--info); text-decoration: none; }
+    td.url a:hover { text-decoration: underline; }
+    td.name { max-width: 180px; word-break: break-word; color: var(--text); font-weight: 500; }
+    td.message { max-width: 250px; word-break: break-word; color: var(--text-muted); font-size: 12px; }
+
+    /* Snapshot thumbnail styles */
+    td.snapshot { width: 100px; text-align: center; }
+    td.snapshot img {
+      width: 80px; height: 45px; object-fit: cover; border-radius: 4px;
+      background: #000; box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      cursor: zoom-in; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    td.snapshot img:hover {
+      transform: scale(3.5); z-index: 100; position: relative; box-shadow: var(--shadow); border: 1px solid var(--border);
+    }
+    .snap-placeholder {
+      width: 80px; height: 45px; border-radius: 4px; background: rgba(255,255,255,0.05);
+      display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: var(--text-muted);
+    }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px;
+      border-radius: 99px; font-weight: 600; font-size: 11px; white-space: nowrap;
+    }
+    .pending { background: rgba(139, 144, 165, 0.15); color: var(--text-muted); }
+    .checking { background: rgba(59, 130, 246, 0.15); color: var(--info); }
+    .ok { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .warn { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+    .bad { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+
+    @media (max-width: 640px) {
+      .wrap { padding: 16px 12px 40px; }
+      .grid { grid-template-columns: 1fr; }
+      td.url { max-width: 180px; }
+      td.name { max-width: 100px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">📡</div>
+      <div>
+        <h1>M3U URL Status & Snapshot Checker</h1>
+        <p>Validate IPTV URLs concurrently and grab stream thumbnails</p>
+      </div>
+    </header>
+
+    <div class="note">
+      ⚠️ <b>Browser Security (CORS)</b>: Browsers block scripts from reading status codes or grabbing video screenshots from cross-origin servers. 
+      If links fail or screenshots don't appear, use the <b>CORS Proxy</b> below or run with a browser plugin that disables CORS. <br>
+      <i>Note: Grabbing snapshots takes extra time and bandwidth as it must download the first video frames.</i>
+    </div>
+
+    <!-- Source Card -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📂</span> Playlist Source</div>
+      <label>
+        Open local M3U file
+        <input type="file" id="file" accept=".m3u,.m3u8,text/plain,audio/x-mpegurl,application/vnd.apple.mpegurl">
+      </label>
+      <div class="row">
+        <input id="m3uUrl" type="text" placeholder="Or paste M3U URL, e.g. https://example.com/playlist.m3u">
+        <button id="loadUrlBtn">Load URL</button>
+      </div>
+      <div class="quick-imports">
+        <button class="quick-btn" id="importHinBtn"><span class="flag">🇮🇳</span> Hindi Playlist</button>
+        <button class="quick-btn" id="importMalBtn"><span class="flag">🇮🇳</span> Malayalam Playlist</button>
+      </div>
+    </div>
+
+    <!-- Settings Card -->
+    <div class="card">
+      <div class="card-title"><span class="icon">⚙️</span> Settings</div>
+      <div class="grid">
+        <label>
+          Concurrent checks
+          <input id="concurrency" type="number" min="1" max="50" value="5">
+        </label>
+        <label>
+          Timeout per URL (ms)
+          <input id="timeout" type="number" min="1000" max="120000" value="10000">
+        </label>
+        <label>
+          CORS Proxy
+          <select id="proxySelect">
+            <option value="">None (direct)</option>
+            <option value="https://corsproxy.io/?{url}">corsproxy.io</option>
+            <option value="https://api.allorigins.win/raw?url={url}">allorigins.win</option>
+            <option value="https://api.codetabs.com/v1/proxy?quest={url}">codetabs.com</option>
+            <option value="custom">Custom...</option>
+          </select>
+        </label>
+        <label id="customProxyLabel" style="display:none;">
+          Custom CORS proxy template (use {url})
+          <input id="proxy" type="text" placeholder="https://your-proxy.com/?url={url}">
+        </label>
+      </div>
+      <div class="checkbox-row">
+        <label><input id="fallback" type="checkbox" checked> Fallback to GET if HEAD fails</label>
+        <label><input id="grabSnapshots" type="checkbox"> 📸 Grab Screenshots (Slower, requires CORS)</label>
+        <label><input id="autoStart" type="checkbox" checked> Auto-start after loading</label>
+      </div>
+      <div class="actions">
+        <button id="startBtn" disabled>▶ Start / Recheck</button>
+        <button id="stopBtn" class="btn-danger" disabled>⏹ Stop</button>
+        <button id="clearBtn" class="btn-secondary">🗑 Clear</button>
+        <button id="exportBtn" class="btn-success" disabled>📥 Export CSV</button>
+      </div>
+    </div>
+
+    <!-- Progress Card -->
+    <div class="card">
+      <div class="card-title"><span class="icon">📊</span> Progress</div>
+      <div id="playlistInfo">No playlist loaded.</div>
+      <div class="progress-wrap">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-text">
+          <span id="progressLabel">0 / 0 checked</span>
+          <span id="progressPercent">0%</span>
+        </div>
+      </div>
+      <div id="summary">No URLs loaded.</div>
+      <div class="stats" id="statsRow"></div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px">#</th>
+              <th>Name</th>
+              <th style="width:100px">Snapshot</th>
+              <th>URL</th>
+              <th style="width:100px">Status</th>
+              <th style="width:80px">Time</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <div class="icon">📋</div>
+                  <div>Load a playlist to begin checking URLs</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    let items = [];
+    let running = false;
+    let stopRequested = false;
+
+    const tbody = $("tbody");
+
+    // Proxy selector logic
+    $("proxySelect").addEventListener("change", () => {
+      const val = $("proxySelect").value;
+      $("customProxyLabel").style.display = val === "custom" ? "block" : "none";
+    });
+
+    function getProxyTemplate() {
+      const sel = $("proxySelect").value;
+      if (sel === "custom") return $("proxy").value.trim();
+      return sel;
+    }
+
+    function proxiedUrl(originalUrl) {
+      const template = getProxyTemplate();
+      if (!template) return originalUrl;
+      const encoded = encodeURIComponent(originalUrl);
+      if (template.includes("{url}")) {
+        return template.split("{url}").join(encoded);
+      }
+      return template + encoded;
+    }
+
+    function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+
+    function parseM3U(text, baseUrl = "") {
+      const results = [];
+      let pendingName = "";
+      const lines = text.split(/\r?\n/);
+
+      for (const raw of lines) {
+        let line = raw.trim();
+        if (!line) continue;
+        if (/^#EXTINF/i.test(line)) {
+          const commaIndex = line.lastIndexOf(",");
+          if (commaIndex !== -1 && commaIndex < line.length - 1) {
+            pendingName = line.slice(commaIndex + 1).trim();
+          } else {
+            const match = line.match(/tvg-name="([^"]+)"/i);
+            pendingName = match ? match[1].trim() : "";
+          }
+          continue;
+        }
+        if (line.startsWith("#")) continue;
+
+        line = line.replace(/^["'](.+)["']$/, "$1");
+        let url = line;
+
+        if (!/^[a-z][a-z0-9+.-]*:/i.test(url) && baseUrl) {
+          try { url = new URL(url, baseUrl).href; } catch (_) {}
+        }
+        results.push({ name: pendingName, url, state: "pending", status: "", statusText: "", ms: "", message: "", snapshot: null });
+        pendingName = "";
+      }
+      return results;
+    }
+
+    function badgeFor(item) {
+      if (item.state === "pending") return { label: "Pending", cls: "pending" };
+      if (item.state === "checking") return { label: "Checking…", cls: "checking" };
+      if (item.state === "unsupported") return { label: "Unsupported", cls: "warn" };
+      if (item.state === "stopped") return { label: "Stopped", cls: "warn" };
+      if (item.state === "error") return { label: "Error", cls: "bad" };
+      const code = Number(item.status);
+      if (Number.isFinite(code)) {
+        if (code >= 200 && code < 400) return { label: `${code} OK`, cls: "ok" };
+        if (code >= 400 && code < 500) return { label: `${code}`, cls: "warn" };
+        if (code >= 500) return { label: `${code}`, cls: "bad" };
+      }
+      return { label: "Unknown", cls: "bad" };
+    }
+
+    function renderItems() {
+      tbody.textContent = "";
+      if (!items.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="7"><div class="empty-state"><div class="icon">📋</div><div>Load a playlist to begin checking URLs</div></div></td>`;
+        tbody.appendChild(tr);
+        updateSummary(); updateButtons(); return;
+      }
+      
+      const fragment = document.createDocumentFragment();
+      items.forEach((item, index) => {
+        const tr = document.createElement("tr");
+
+        const tdIndex = document.createElement("td"); tdIndex.textContent = index + 1; tdIndex.style.color = "var(--text-muted)";
+        const tdName = document.createElement("td"); tdName.className = "name"; tdName.textContent = item.name || "—";
+        const tdSnap = document.createElement("td"); tdSnap.className = "snapshot";
+        const tdUrl = document.createElement("td"); tdUrl.className = "url";
+        const link = document.createElement("a"); link.href = item.url; link.target = "_blank"; link.textContent = item.url;
+        tdUrl.appendChild(link);
+        
+        const tdStatus = document.createElement("td");
+        const tdTime = document.createElement("td");
+        const tdMessage = document.createElement("td"); tdMessage.className = "message";
+
+        item._cells = { status: tdStatus, time: tdTime, message: tdMessage, snap: tdSnap };
+        
+        tr.append(tdIndex, tdName, tdSnap, tdUrl, tdStatus, tdTime, tdMessage);
+        fragment.appendChild(tr);
+        updateRow(index, item);
+      });
+      tbody.appendChild(fragment);
+      updateSummary(); updateButtons();
+    }
+
+    function updateRow(index, patch) {
+      const item = items[index];
+      if (!item) return;
+      Object.assign(item, patch);
+      if (!item._cells) return;
+
+      const badge = badgeFor(item);
+      item._cells.status.innerHTML = `<span class="badge ${badge.cls}">${badge.label}</span>`;
+      item._cells.time.textContent = item.ms ? item.ms + " ms" : "—";
+      item._cells.time.style.color = "var(--text-muted)";
+      item._cells.message.textContent = item.message || "";
+      
+      if (item.snapshot) {
+        item._cells.snap.innerHTML = `<img src="${item.snapshot}" alt="Snap" loading="lazy" />`;
+      } else {
+        item._cells.snap.innerHTML = `<div class="snap-placeholder">${item.state === 'checking' ? '...' : 'No img'}</div>`;
+      }
+    }
+
+    function updateSummary() {
+      const total = items.length;
+      const finished = items.filter(i => ["done", "error", "unsupported", "stopped"].includes(i.state)).length;
+      const pct = total ? Math.round((finished / total) * 100) : 0;
+      
+      $("progressFill").style.width = pct + "%";
+      $("progressFill").className = "progress-fill" + (running ? " running" : "");
+      $("progressLabel").textContent = `${finished} / ${total} checked`;
+      $("progressPercent").textContent = pct + "%";
+
+      if (!total) {
+        $("summary").textContent = "No URLs loaded."; $("statsRow").innerHTML = ""; return;
+      }
+
+      const counts = { ok: 0, warn: 0, bad: 0, error: 0, unsupported: 0, checking: 0, pending: 0, stopped: 0 };
+      for (const item of items) {
+        const code = Number(item.status);
+        if (item.state === "checking") counts.checking++;
+        else if (item.state === "pending") counts.pending++;
+        else if (item.state === "unsupported") counts.unsupported++;
+        else if (item.state === "stopped") counts.stopped++;
+        else if (item.state === "error") counts.error++;
+        else if (Number.isFinite(code) && code >= 200 && code < 400) counts.ok++;
+        else if (Number.isFinite(code) && code >= 400 && code < 500) counts.warn++;
+        else if (Number.isFinite(code) && code >= 500) counts.bad++;
+        else counts.error++;
+      }
+
+      const statsRow = $("statsRow"); statsRow.innerHTML = "";
+      const defs = [
+        { k: "ok", l: "OK", c: "stat-ok" }, { k: "warn", l: "4xx", c: "stat-warn" },
+        { k: "bad", l: "5xx", c: "stat-bad" }, { k: "error", l: "Errors", c: "stat-bad" },
+        { k: "checking", l: "Checking", c: "stat-info" }, { k: "pending", l: "Pending", c: "stat-muted" }
+      ];
+      defs.forEach(s => {
+        if (counts[s.k] > 0) {
+          const el = document.createElement("span"); el.className = `stat ${s.c}`; el.textContent = `${s.l}: ${counts[s.k]}`;
+          statsRow.appendChild(el);
+        }
+      });
+    }
+
+    function updateButtons() {
+      $("startBtn").disabled = running || !items.length;
+      $("stopBtn").disabled = !running;
+      $("exportBtn").disabled = !items.length;
+      $("clearBtn").disabled = running;
+    }
+
+    // Capture Frame function using hidden video & canvas
+    async function captureFrame(url, timeoutMs) {
+      return new Promise((resolve) => {
+        let isResolved = false;
+        let hls = null;
+        const video = document.createElement('video');
+        video.crossOrigin = "anonymous";
+        video.muted = true;
+        video.autoplay = true;
+
+        const cleanup = () => {
+          if (hls) hls.destroy();
+          video.pause(); video.removeAttribute('src'); video.load();
+        };
+
+        const finish = (result) => {
+          if (isResolved) return;
+          isResolved = true;
+          cleanup();
+          resolve(result);
+        };
+
+        const timer = setTimeout(() => finish(null), timeoutMs);
+
+        const tryDraw = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 320;
+            canvas.height = video.videoHeight || 180;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            finish(canvas.toDataURL('image/jpeg', 0.6));
+          } catch (e) {
+            finish(null); // Usually CORS taint error
+          }
+        };
+
+        video.addEventListener('loadeddata', () => { setTimeout(tryDraw, 600); }); // wait slightly for paint
+        video.addEventListener('error', () => finish(null));
+
+        if (url.includes('.m3u8') && Hls.isSupported()) {
+          hls = new Hls({ maxMaxBufferLength: 1, manifestLoadingTimeOut: timeoutMs, levelLoadingTimeOut: timeoutMs, fragLoadingTimeOut: timeoutMs });
+          hls.loadSource(url);
+          hls.attachMedia(video);
+          hls.on(Hls.Events.ERROR, (evt, data) => { if (data.fatal) finish(null); });
+        } else {
+          video.src = url;
+        }
+      });
+    }
+
+    async function fetchStatus(url, method, timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const started = performance.now();
+      const target = proxiedUrl(url);
+
+      try {
+        const options = { method, redirect: "follow", cache: "no-store", signal: controller.signal };
+        if (method === "GET") options.headers = { Range: "bytes=0-0" };
+
+        const response = await fetch(target, options);
+        if (response.body) try { await response.body.cancel(); } catch (_) {}
+        
+        const ms = Math.round(performance.now() - started);
+        const upStatus = response.headers.get("x-upstream-status");
+        let status = upStatus ? Number(upStatus) : response.status;
+        if (!Number.isFinite(status)) status = response.status;
+        
+        return { state: "done", status, ms, message: `${method} ${status} ${response.statusText}` };
+      } catch (error) {
+        return { state: "error", status: "", ms: Math.round(performance.now() - started), 
+          message: error.name === "AbortError" ? `Timeout (${method})` : `Failed: ${error.message}` };
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function checkOne(item) {
+      const url = item.url.trim();
+      if (!/^https?:\/\//i.test(url)) return { state: "unsupported", message: "Invalid URL" };
+
+      const timeoutMs = clamp(Number($("timeout").value) || 10000, 1000, 120000);
+      const useFallback = $("fallback").checked;
+      const grabSnapshots = $("grabSnapshots").checked;
+
+      let result = await fetchStatus(url, "HEAD", timeoutMs);
+      const headOk = result.state === "done" && result.status >= 200 && result.status < 400;
+
+      if (useFallback && !headOk) {
+        const getResult = await fetchStatus(url, "GET", timeoutMs);
+        getResult.message = `${getResult.message} | (HEAD: ${result.message})`;
+        result = getResult;
+      }
+
+      // Try capturing snapshot if stream appears reachable
+      const finalOk = result.state === "done" && result.status >= 200 && result.status < 400;
+      if (finalOk && grabSnapshots) {
+        result.message += " | Capturing snap...";
+        updateRow(items.indexOf(item), result); // Update UI to show downloading state
+        const snapTargetUrl = getProxyTemplate() ? proxiedUrl(url) : url; 
+        const snap = await captureFrame(snapTargetUrl, timeoutMs);
+        result.snapshot = snap;
+        result.message = result.message.replace(" | Capturing snap...", snap ? " | Snap OK" : " | Snap Failed (CORS/Timeout)");
+      }
+
+      return result;
+    }
+
+    async function startChecks() {
+      if (running || !items.length) return;
+      running = true; stopRequested = false; updateButtons();
+
+      items.forEach((_, index) => updateRow(index, { state: "pending", status: "", ms: "", message: "", snapshot: null }));
+      updateSummary();
+
+      const concurrency = clamp(Number($("concurrency").value) || 5, 1, 50);
+      let nextIndex = 0;
+      
+      const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+        while (!stopRequested) {
+          const index = nextIndex++;
+          if (index >= items.length) break;
+          updateRow(index, { state: "checking", message: "Checking…" }); updateSummary();
+          const result = await checkOne(items[index]);
+          updateRow(index, result); updateSummary();
+        }
+      });
+      await Promise.all(workers);
+
+      if (stopRequested) items.forEach((item, index) => {
+        if (item.state === "pending" || item.state === "checking") updateRow(index, { state: "stopped", message: "Stopped" });
+      });
+
+      running = false; updateSummary(); updateButtons();
+    }
+
+    async function loadPlaylistText(text, baseUrl, label) {
+      if (running) return alert("Stop current check first.");
+      items = parseM3U(text, baseUrl); renderItems();
+      $("playlistInfo").textContent = `${label}: ${items.length} URL(s) found.`;
+      if (items.length && $("autoStart").checked) startChecks();
+    }
+
+    async function loadPlaylistUrl(url) {
+      if (running) return alert("Stop current check first.");
+      if (!url) return alert("Enter an M3U URL.");
+      $("playlistInfo").textContent = `Loading playlist from ${url}...`;
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`${response.status}`);
+        const text = await response.text();
+        await loadPlaylistText(text, url, url);
+      } catch (error) {
+        $("playlistInfo").textContent = `Failed to load: ${error.message}. Try using a proxy or download the file locally.`;
+      }
+    }
+
+    function exportCsv() {
+      if (!items.length) return;
+      const escapeCsv = val => `"${String(val ?? "").replace(/"/g, '""')}"`;
+      const rows = [["#", "Name", "URL", "Status", "Time ms", "Message"]];
+      items.forEach((item, index) => rows.push([index + 1, item.name, item.url, item.status || item.state, item.ms, item.message]));
+      const blob = new Blob([rows.map(row => row.map(escapeCsv).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "m3u-status.csv"; link.click();
+    }
+
+    function clearAll() {
+      if (running) return;
+      items = []; tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><div>Load a playlist</div></div></td></tr>`;
+      $("playlistInfo").textContent = "No playlist loaded."; $("progressFill").style.width = "0%";
+      $("summary").textContent = "No URLs loaded."; $("statsRow").innerHTML = ""; updateButtons();
+    }
+
+    // Events
+    $("file").addEventListener("change", async e => {
+      const file = e.target.files[0]; if (!file) return;
+      await loadPlaylistText(await file.text(), "", file.name);
+    });
+    $("loadUrlBtn").addEventListener("click", () => loadPlaylistUrl($("m3uUrl").value.trim()));
+    $("m3uUrl").addEventListener("keydown", e => { if (e.key === "Enter") loadPlaylistUrl($("m3uUrl").value.trim()); });
+    
+    $("importHinBtn").addEventListener("click", () => { $("m3uUrl").value = "https://iptv-org.github.io/iptv/languages/hin.m3u"; $("loadUrlBtn").click(); });
+    $("importMalBtn").addEventListener("click", () => { $("m3uUrl").value = "https://iptv-org.github.io/iptv/languages/mal.m3u"; $("loadUrlBtn").click(); });
+
+    $("startBtn").addEventListener("click", startChecks);
+    $("stopBtn").addEventListener("click", () => { stopRequested = true; $("stopBtn").disabled = true; });
+    $("clearBtn").addEventListener("click", clearAll);
+    $("exportBtn").addEventListener("click", exportCsv);
+
+    updateButtons();
+  </script>
+</body>
+</html>
